@@ -9,6 +9,9 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Set page config to wide mode
+st.set_page_config(layout="wide")
+
 def safe_execute(func):
     def wrapper(*args, **kwargs):
         try:
