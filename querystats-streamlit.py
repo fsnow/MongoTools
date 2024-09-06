@@ -4,6 +4,7 @@ import json
 from collections import defaultdict
 import traceback
 import logging
+import extra_streamlit_components as stx
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -11,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 # Set page config to wide mode
 st.set_page_config(layout="wide")
+
+# Initialize cookie manager
+cookie_manager = stx.CookieManager()
 
 def safe_execute(func):
     def wrapper(*args, **kwargs):
@@ -288,7 +292,10 @@ def main():
     st.title("MongoDB $queryStats Analyzer")
 
     # MongoDB connection
-    connection_string = st.text_input("MongoDB Connection String", "mongodb://localhost:27017")
+    stored_connection_string = cookie_manager.get(cookie='connection_string')
+    connection_string = st.text_input("MongoDB Connection String", 
+                                      value=stored_connection_string or "mongodb://localhost:27017")
+    
     if st.button("Connect"):
         try:
             client = MongoClient(connection_string)
@@ -296,6 +303,9 @@ def main():
             st.session_state.query_stats = get_query_stats(client)
             st.session_state.mongodb_version = get_mongodb_version(client)
             st.success(f"Connected successfully! MongoDB version: {st.session_state.mongodb_version}")
+            
+            # Store the connection string in a cookie
+            cookie_manager.set('connection_string', connection_string, expires_at=None)
         except Exception as e:
             error_msg = f"Error connecting to MongoDB: {str(e)}"
             logger.error(error_msg)
