@@ -1,7 +1,7 @@
 # Atlas Data Federation
 ## Change Cluster and Use Wildcard Databases and Collections
 
-This script reconfigures an existing Atlas Data Federation instance to use a different cluster as its data source. It also changes the data source mapping to use wildcards so that all databases and collections in the cluster are available without any additional configuration.
+This [script](adf-change-cluster.py) reconfigures an existing Atlas Data Federation instance to use a different cluster as its data source. It also changes the data source mapping to use wildcards so that all databases and collections in the cluster are available without any additional configuration.
 
 Usage:
 ```
