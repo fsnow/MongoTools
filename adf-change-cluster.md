@@ -12,7 +12,7 @@ The Atlas API key will be read from the environment variables MONGODB_ATLAS_PUBL
 
 ## How it Works
 
-The script first calls the [getFederatedDatabase](https://www.mongodb.com/docs/atlas/reference/api-resources-spec/v2/#tag/Data-Federation/operation/getFederatedDatabase) API to get the full configuration JSON for the instance. A new JSON is contructed from the GET response with the top-level fields cloudProviderConfig, dataProcessRegion and name. To this we add the storage field that has the wildcard database configuration as well as the new cluster name. We then call the [updateFederatedDatabase](https://www.mongodb.com/docs/atlas/reference/api-resources-spec/v2/#tag/Data-Federation/operation/updateFederatedDatabase) API to modify the configuration.
+The script first calls the [getFederatedDatabase](https://www.mongodb.com/docs/atlas/reference/api-resources-spec/v2/#tag/Data-Federation/operation/getFederatedDatabase) API to get the full configuration JSON for the instance. A new JSON is contructed from the GET response with the top-level fields cloudProviderConfig, dataProcessRegion and name. To this we add the storage field that has the [wildcard database configuration](https://www.mongodb.com/docs/atlas/data-federation/config/atlas-gen-wildcard-collections/) as well as the new cluster name. We then call the [updateFederatedDatabase](https://www.mongodb.com/docs/atlas/reference/api-resources-spec/v2/#tag/Data-Federation/operation/updateFederatedDatabase) API to modify the configuration.
 
 Note that the hard-coded configuration also includes secondary read preference, so modify this if desired.
 
