@@ -8,7 +8,7 @@ Usage:
 python adf-change-cluster.py <PROJECT_ID> <FEDERATED_NAME> <CLUSTER_NAME> --public_key <API_PUBLIC_KEY> --private_key API_PRIVATE_KEY
 ```
 
-The Atlas API will be read from the environment variables MONGODB_ATLAS_PUBLIC_KEY and MONGODB_ATLAS_PRIVATE_KEY if not passed on the command line.
+The Atlas API key will be read from the environment variables MONGODB_ATLAS_PUBLIC_KEY and MONGODB_ATLAS_PRIVATE_KEY if not passed on the command line.
 
 ## How it Works
 
@@ -16,5 +16,5 @@ The script first calls the [getFederatedDatabase](https://www.mongodb.com/docs/a
 
 Note that the hard-coded configuration also includes secondary read preference, so modify this if desired.
 
-In my testing I found that if the region is not specified in the configuration (i.e. set to "closest"), the get API returns {region: null}, but the update API fails with this value. I had to change from "closest" to a specified region.
+In my testing I found that if the region of the federated database instance is not specified in the configuration (i.e. set to "closest"), the get API returns {region: null}, but the update API fails with this value. I had to change from "closest" to a specified region.
 
