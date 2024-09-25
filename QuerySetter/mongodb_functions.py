@@ -61,6 +61,13 @@ def get_plan_stages(plan):
 
 @safe_execute
 def get_query_stats(client):
+    # Check the internalQueryStatsRateLimit parameter
+    param_state = client.admin.command({'getParameter': 1, 'internalQueryStatsRateLimit': 1})
+    rate_limit = param_state.get('internalQueryStatsRateLimit')
+    
+    if rate_limit == 0:
+        return {"error": "rate_limit_zero"}
+
     MATCH_STAGE = {
         "$match": {"key.queryShape.cmdNs.db": {"$nin": ["admin", "config", "local"]}}
     }
@@ -82,6 +89,9 @@ def get_query_stats(client):
         coll_name = query_shape['cmdNs']['coll']
         namespace = f"{db_name}.{coll_name}"
         query_stats[namespace].append(doc)
+
+    if not query_stats:
+        return {"error": "empty_query_stats"}
 
     return query_stats
 
@@ -106,7 +116,6 @@ def get_explain_plan(client, entry):
             "pipeline": query_shape['pipeline'],
             "explain": True
         })
-    # coll.aggregate(query_shape['pipeline']).explain()
     return None
 
 @safe_execute

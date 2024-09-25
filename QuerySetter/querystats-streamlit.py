@@ -78,6 +78,16 @@ def display_query_stat(client, entry, show_rejection_filter):
 def main():
     st.title("MongoDB $queryStats Analyzer")
 
+    # Initialize session state variables
+    if 'connected' not in st.session_state:
+        st.session_state.connected = False
+    if 'connection_error' not in st.session_state:
+        st.session_state.connection_error = None
+    if 'query_stats_error' not in st.session_state:
+        st.session_state.query_stats_error = None
+    if 'rate_limit' not in st.session_state:
+        st.session_state.rate_limit = None
+
     # MongoDB connection
     stored_connection_string = cookie_manager.get(cookie='connection_string')
     connection_string = st.text_input("MongoDB Connection String", 
@@ -87,16 +97,64 @@ def main():
         try:
             client = MongoClient(connection_string)
             st.session_state.client = client
-            st.session_state.query_stats = get_query_stats(client)
             st.session_state.mongodb_version = get_mongodb_version(client)
-            st.success(f"Connected successfully! MongoDB version: {st.session_state.mongodb_version}")
+            st.session_state.connected = True
+            st.session_state.connection_error = None
             
             # Store the connection string in a cookie
             cookie_manager.set('connection_string', connection_string, expires_at=None)
+            
+            # Get query stats
+            query_stats_result = get_query_stats(client)
+            
+            if isinstance(query_stats_result, dict) and "error" in query_stats_result:
+                st.session_state.query_stats_error = query_stats_result["error"]
+                st.session_state.query_stats = None
+                if query_stats_result["error"] == "rate_limit_zero":
+                    st.session_state.rate_limit = 0
+            else:
+                st.session_state.query_stats = query_stats_result
+                st.session_state.query_stats_error = None
+                st.session_state.rate_limit = None  # Reset rate_limit if query stats are successfully retrieved
+            
         except Exception as e:
-            st.error(f"Error connecting to MongoDB: {str(e)}")
+            st.session_state.connected = False
+            st.session_state.connection_error = str(e)
 
-    if 'client' in st.session_state:
+    # Display connection status and errors
+    if st.session_state.connected:
+        st.success(f"Connected successfully! MongoDB version: {st.session_state.mongodb_version}")
+    if st.session_state.connection_error:
+        st.error(f"Error connecting to MongoDB: {st.session_state.connection_error}")
+    if st.session_state.rate_limit == 0:
+        st.warning("⚠️ The internalQueryStatsRateLimit is set to 0. $queryStats sampling is disabled.")
+        
+        # Add text input and button to set new rate limit
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_rate_limit = st.number_input("Enter new internalQueryStatsRateLimit:", min_value=1, value=100, step=1)
+        with col2:
+            if st.button("Set Rate Limit"):
+                try:
+                    st.session_state.client.admin.command({'setParameter': 1, 'internalQueryStatsRateLimit': new_rate_limit})
+                    st.success(f"internalQueryStatsRateLimit set to {new_rate_limit}")
+                    # Refresh query stats
+                    query_stats_result = get_query_stats(st.session_state.client)
+                    if isinstance(query_stats_result, dict) and "error" in query_stats_result:
+                        st.session_state.query_stats_error = query_stats_result["error"]
+                        st.session_state.query_stats = None
+                    else:
+                        st.session_state.query_stats = query_stats_result
+                        st.session_state.query_stats_error = None
+                        st.session_state.rate_limit = None
+                except Exception as e:
+                    st.error(f"Error setting rate limit: {str(e)}")
+        
+        st.info("To enable $queryStats, set internalQueryStatsRateLimit to a positive integer.")
+    elif st.session_state.query_stats_error == "empty_query_stats":
+        st.info("No query statistics available. This could be because no queries have been executed since the last server restart or $queryStats collection.")
+
+    if st.session_state.connected and st.session_state.query_stats and not st.session_state.query_stats_error:
         try:
             # Create dropdown for namespace selection
             namespaces = list(st.session_state.query_stats.keys())
