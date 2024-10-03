@@ -1,2 +1,6 @@
 
 .DS_Store
+
+QuerySetter/debug/
+
+QuerySetter/__pycache__/
