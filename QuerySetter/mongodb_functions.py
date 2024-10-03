@@ -1,6 +1,7 @@
 # mongodb_functions.py
 
 from pymongo import MongoClient
+from uuid import uuid4
 from collections import defaultdict
 import traceback
 import logging
@@ -64,7 +65,7 @@ def get_query_stats(client):
     # Check the internalQueryStatsRateLimit parameter
     param_state = client.admin.command({'getParameter': 1, 'internalQueryStatsRateLimit': 1})
     rate_limit = param_state.get('internalQueryStatsRateLimit')
-    
+
     if rate_limit == 0:
         return {"error": "rate_limit_zero"}
 
@@ -194,6 +195,46 @@ def create_representative_query(query_doc):
                     rep_query[key] = {"$date": "2024-01-01T00:00:00.000Z"}
                 elif value == '?objectId':
                     rep_query[key] = {"$oid": "000000000000000000000000"}
+                elif value == '?bool':
+                    rep_query[key] = True
+                elif value == '?null':
+                    rep_query[key] = None
+                elif value == '?object':
+                    rep_query[key] = {"a": 1}
+                elif value == '?binData':
+                    rep_query[key] = {"$binary": {"base64": "YQ==", "subType": "00"}}
+                elif value == '?timestamp':
+                    rep_query[key] = { "$timestamp": { "t": 1677749825, "i": 20 } }
+                elif value == '?minKey':
+                    rep_query[key] = { '$minKey': 1 }
+                elif value == '?maxKey':
+                    rep_query[key] = { '$maxKey': 1 }
+                elif value == '?array<>':
+                    rep_query[key] = ["a", 1]
+                elif value == '?array<?number>':
+                    rep_query[key] = [1]
+                elif value == '?array<?string>':
+                    rep_query[key] = ["a"]
+                elif value == '?array<?date>':
+                    rep_query[key] = [{"$date": "2024-01-01T00:00:00.000Z"}]
+                elif value == '?array<?objectId>':
+                    rep_query[key] = [{"$oid": "000000000000000000000000"}]
+                elif value == '?array<?bool>':
+                    rep_query[key] = [True]
+                elif value == '?array<?null>':
+                    rep_query[key] = [None]
+                elif value == '?array<?object>':
+                    rep_query[key] = [{"a": 1}]
+                elif value == '?array<?binData>':
+                    rep_query[key] = [{"$binary": {"base64": "YQ==", "subType": "00"}}]
+                elif value == '?array<?timestamp>':
+                    rep_query[key] = [{ "$timestamp": { "t": 1677749825, "i": 20 } }]
+                elif value == '?array<?minKey>':
+                    rep_query[key] = [{ '$minKey': 1 }]
+                elif value == '?array<?maxKey>':
+                    rep_query[key] = [{ '$maxKey': 1 }]
+                elif value == '?array<?array>':
+                    rep_query[key] = [["a"]]
                 else:
                     rep_query[key] = value  # Keep other placeholders as is for now
             elif isinstance(value, dict):
