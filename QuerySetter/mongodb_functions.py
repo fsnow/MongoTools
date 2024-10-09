@@ -1,10 +1,11 @@
-# mongodb_functions.py
-
 from pymongo import MongoClient
 from uuid import uuid4
 from collections import defaultdict
 import traceback
 import logging
+import hashlib
+import json
+import re
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -100,6 +101,16 @@ def get_query_stats(client):
 def get_indexes(client, namespace):
     db_name, coll_name = namespace.split('.')
     return list(client[db_name][coll_name].list_indexes())
+
+@safe_execute
+def get_index_info(client, db_name, coll_name, index_name):
+    db = client[db_name]
+    coll = db[coll_name]
+    indexes = list(coll.list_indexes())
+    for index in indexes:
+        if index['name'] == index_name:
+            return index
+    return None
 
 @safe_execute
 def get_explain_plan(client, entry):
@@ -250,6 +261,66 @@ def create_representative_query(query_doc):
         return query_doc
 
 @safe_execute
+def transform_to_mongosh(query):
+    def transform(value):
+        if isinstance(value, dict):
+            if '$date' in value:
+                return f'ISODate("{value["$date"]}")'
+            elif '$oid' in value:
+                return f'ObjectId("{value["$oid"]}")'
+            elif '$binary' in value:
+                return f'BinData({int(value["$binary"]["subType"], 16)}, "{value["$binary"]["base64"]}")'
+            elif '$timestamp' in value:
+                return f'Timestamp({value["$timestamp"]["t"]}, {value["$timestamp"]["i"]})'
+            elif '$minKey' in value:
+                return 'MinKey()'
+            elif '$maxKey' in value:
+                return 'MaxKey()'
+            else:
+                return {k: transform(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [transform(item) for item in value]
+        else:
+            return value
+
+    return transform(query)
+
+import json
+
+@safe_execute
+def stringify_for_mongosh(obj, indent=0):
+    if isinstance(obj, dict):
+        if not obj:
+            return "{}"
+        lines = ["{"]
+        for k, v in obj.items():
+            lines.append(f"{' ' * (indent + 2)}{stringify_for_mongosh(k)}: {stringify_for_mongosh(v, indent + 2)},")
+        lines[-1] = lines[-1].rstrip(',')  # Remove trailing comma from last item
+        lines.append(f"{' ' * indent}}}")
+        return "\n".join(lines)
+    elif isinstance(obj, list):
+        if not obj:
+            return "[]"
+        lines = ["["]
+        for item in obj:
+            lines.append(f"{' ' * (indent + 2)}{stringify_for_mongosh(item, indent + 2)},")
+        lines[-1] = lines[-1].rstrip(',')  # Remove trailing comma from last item
+        lines.append(f"{' ' * indent}]")
+        return "\n".join(lines)
+    elif isinstance(obj, str):
+        if obj.startswith('ISODate(') or obj.startswith('ObjectId(') or obj.startswith('BinData(') or \
+           obj.startswith('Timestamp(') or obj == 'MinKey()' or obj == 'MaxKey()':
+            return obj
+        else:
+            return json.dumps(obj)
+    elif obj is None:
+        return 'null'
+    elif isinstance(obj, bool):
+        return 'true' if obj else 'false'
+    else:
+        return str(obj)
+
+@safe_execute
 def create_rejection_filter(query_shape, rep_query):
     command = query_shape.get('command', 'Unknown')
     db_name = query_shape['cmdNs']['db']
@@ -259,7 +330,6 @@ def create_rejection_filter(query_shape, rep_query):
     rejection_filter = {
         "setQuerySettings": {
             command: coll_name,
-            "filter": rep_query,
             "$db": db_name
         },
         "settings": {
@@ -267,7 +337,103 @@ def create_rejection_filter(query_shape, rep_query):
         }
     }
 
+    # Transform the representative query to mongosh format
+    transformed_query = transform_to_mongosh(rep_query)
+
+    # Determine whether to use 'filter' or 'pipeline' based on rep_query type
+    if isinstance(transformed_query, list):
+        rejection_filter["setQuerySettings"]["pipeline"] = transformed_query
+    else:
+        rejection_filter["setQuerySettings"]["filter"] = transformed_query
+
     if sort:
         rejection_filter["setQuerySettings"]["sort"] = sort
 
-    return rejection_filter
+    # Convert the rejection filter to a pretty-printed mongosh-compatible string
+    return f"db.adminCommand(\n{stringify_for_mongosh(rejection_filter, indent=2)}\n)"
+
+    # Transform the representative query to mongosh format
+    transformed_query = transform_to_mongosh(rep_query)
+
+    # Determine whether to use 'filter' or 'pipeline' based on rep_query type
+    if isinstance(transformed_query, list):
+        rejection_filter["setQuerySettings"]["pipeline"] = transformed_query
+    else:
+        rejection_filter["setQuerySettings"]["filter"] = transformed_query
+
+    if sort:
+        rejection_filter["setQuerySettings"]["sort"] = sort
+
+    # Convert the rejection filter to a mongosh-compatible string
+    return f"db.adminCommand({stringify_for_mongosh(rejection_filter)})"
+
+@safe_execute
+def extract_index_names(plan):
+    index_names = set()
+    
+    def traverse_plan(node):
+        if isinstance(node, dict):
+            if 'indexName' in node:
+                index_names.add(node['indexName'])
+            for value in node.values():
+                traverse_plan(value)
+        elif isinstance(node, list):
+            for item in node:
+                traverse_plan(item)
+    
+    traverse_plan(plan)
+    return list(index_names)
+
+@safe_execute
+def hash_query_shape(query_shape):
+    """
+    Create a hash of the query shape, preserving structure and placeholder types.
+    """
+    def _hash_element(element):
+        if isinstance(element, dict):
+            return json.dumps({k: _hash_element(v) for k, v in sorted(element.items())}, sort_keys=True)
+        elif isinstance(element, list):
+            return json.dumps([_hash_element(item) for item in element], sort_keys=True)
+        elif isinstance(element, str) and element.startswith('?'):
+            return element  # Preserve placeholder types
+        else:
+            return type(element).__name__  # Use type name for non-placeholder values
+
+    serialized = _hash_element(query_shape)
+    return hashlib.sha256(serialized.encode()).hexdigest()
+
+@safe_execute
+def correlate_queries(query_stats, query_settings):
+    """
+    Correlate queries from $queryStats with those in $querySettings using hash-based matching.
+    """
+    # Hash all queries in $querySettings
+    settings_hash_map = {}
+    for setting in query_settings:
+        debug_shape = setting.get('debugQueryShape', {})
+        query_shape = debug_shape.get('filter') or debug_shape.get('pipeline')
+        if query_shape:
+            query_hash = hash_query_shape(query_shape)
+            settings_hash_map[query_hash] = setting
+
+    # Correlate $queryStats queries with $querySettings
+    correlated_queries = []
+    for stat in query_stats:
+        query_shape = stat['key']['queryShape']
+        command = query_shape.get('command')
+        if command == 'find':
+            shape_to_hash = query_shape.get('filter', {})
+        elif command == 'aggregate':
+            shape_to_hash = query_shape.get('pipeline', [])
+        else:
+            continue  # Skip unsupported commands
+
+        query_hash = hash_query_shape(shape_to_hash)
+        matching_setting = settings_hash_map.get(query_hash)
+
+        correlated_queries.append({
+            'query_stat': stat,
+            'query_setting': matching_setting
+        })
+
+    return correlated_queries

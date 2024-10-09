@@ -1,0 +1,100 @@
+<style>
+/* Main container */
+.main {
+    background-color: #f0f2f6;
+    font-family: 'Roboto', sans-serif;
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+    color: #1e3a8a;
+    font-weight: 600;
+}
+
+/* Sidebar */
+.sidebar .sidebar-content {
+    background-color: #ffffff;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Buttons */
+.stButton>button {
+    color: #ffffff;
+    background-color: #3b82f6;
+    border: none;
+    border-radius: 4px;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    transition: background-color 0.3s ease;
+}
+
+.stButton>button:hover {
+    background-color: #2563eb;
+}
+
+/* Text inputs */
+.stTextInput>div>div>input {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: 0.5rem;
+}
+
+/* Select boxes */
+.stSelectbox>div>div>select {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: 0.5rem;
+}
+
+/* Expander */
+.streamlit-expanderHeader {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+}
+
+/* JSON display */
+.stJson {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: 1rem;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 2rem;
+}
+
+.stTabs [data-baseweb="tab"] {
+    height: 4rem;
+    white-space: pre-wrap;
+    background-color: #ffffff;
+    border-radius: 4px 4px 0 0;
+    color: #6b7280;
+    font-weight: 600;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: #3b82f6;
+    color: #ffffff;
+}
+
+/* Success messages */
+.stSuccess {
+    background-color: #d1fae5;
+    color: #065f46;
+    padding: 0.75rem;
+    border-radius: 4px;
+}
+
+/* Error messages */
+.stError {
+    background-color: #fee2e2;
+    color: #991b1b;
+    padding: 0.75rem;
+    border-radius: 4px;
+}
+</style>
