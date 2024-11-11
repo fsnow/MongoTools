@@ -1,11 +1,14 @@
 from pymongo import MongoClient
 from uuid import uuid4
 from collections import defaultdict
+from bson import ObjectId
+from datetime import datetime
 import traceback
 import logging
 import hashlib
 import json
 import re
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -112,6 +115,12 @@ def get_index_info(client, db_name, coll_name, index_name):
             return index
     return None
 
+import traceback
+import json
+
+import traceback
+import json
+
 @safe_execute
 def get_explain_plan(client, entry):
     query_shape = entry['key']['queryShape']
@@ -120,16 +129,41 @@ def get_explain_plan(client, entry):
     command = query_shape['command']
     coll = client[db_name][coll_name]
 
-    if command == "find":
-        return coll.find(query_shape['filter']).explain()
-    elif command == "aggregate":
-        return client[db_name].command({
-            "aggregate": coll_name,
-            "pipeline": query_shape['pipeline'],
-            "explain": True
-        })
-    return None
-
+    try:
+        if command == "find":
+            rep_query = create_representative_query(query_shape.get('filter', {}))
+            sort_spec = create_representative_query(query_shape.get('sort', {}))
+            
+            # Create a find operation
+            find_operation = coll.find(rep_query)
+            
+            # Only apply sort if sort_spec is not empty
+            if sort_spec:
+                find_operation = find_operation.sort(sort_spec)
+            
+            return find_operation.explain()
+        elif command == "aggregate":
+            rep_pipeline = create_representative_query(query_shape.get('pipeline', []))
+            return client[db_name].command({
+                "aggregate": coll_name,
+                "pipeline": rep_pipeline,
+                "explain": True
+            })
+        else:
+            print(f"Unsupported command: {command}")
+            return None
+    except Exception as e:
+        print(f"Error executing explain for {command}:")
+        print(f"Error message: {str(e)}")
+        print(f"Query shape: {json.dumps(query_shape, indent=2)}")
+        if command == "find":
+            print(f"Representative query: {json.dumps(rep_query, indent=2)}")
+            print(f"Sort specification: {json.dumps(sort_spec, indent=2)}")
+        elif command == "aggregate":
+            print(f"Representative pipeline: {json.dumps(rep_pipeline, indent=2)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return None
+    
 @safe_execute
 def simplify_filter(filter_doc):
     if isinstance(filter_doc, dict):
@@ -192,73 +226,51 @@ def suggest_index(filter_doc, sort_doc):
 def has_collscan(stages):
     return any('COLLSCAN' in stage for stage in stages)
 
+from bson import ObjectId
+from datetime import datetime
+
 @safe_execute
 def create_representative_query(query_doc):
-    if isinstance(query_doc, dict):
-        rep_query = {}
-        for key, value in query_doc.items():
-            if isinstance(value, str) and value.startswith('?'):
-                if value == '?number':
-                    rep_query[key] = 1
-                elif value == '?string':
-                    rep_query[key] = "a"
-                elif value == '?date':
-                    rep_query[key] = {"$date": "2024-01-01T00:00:00.000Z"}
-                elif value == '?objectId':
-                    rep_query[key] = {"$oid": "000000000000000000000000"}
-                elif value == '?bool':
-                    rep_query[key] = True
-                elif value == '?null':
-                    rep_query[key] = None
-                elif value == '?object':
-                    rep_query[key] = {"a": 1}
-                elif value == '?binData':
-                    rep_query[key] = {"$binary": {"base64": "YQ==", "subType": "00"}}
-                elif value == '?timestamp':
-                    rep_query[key] = { "$timestamp": { "t": 1677749825, "i": 20 } }
-                elif value == '?minKey':
-                    rep_query[key] = { '$minKey': 1 }
-                elif value == '?maxKey':
-                    rep_query[key] = { '$maxKey': 1 }
-                elif value == '?array<>':
-                    rep_query[key] = ["a", 1]
-                elif value == '?array<?number>':
-                    rep_query[key] = [1]
-                elif value == '?array<?string>':
-                    rep_query[key] = ["a"]
-                elif value == '?array<?date>':
-                    rep_query[key] = [{"$date": "2024-01-01T00:00:00.000Z"}]
-                elif value == '?array<?objectId>':
-                    rep_query[key] = [{"$oid": "000000000000000000000000"}]
-                elif value == '?array<?bool>':
-                    rep_query[key] = [True]
-                elif value == '?array<?null>':
-                    rep_query[key] = [None]
-                elif value == '?array<?object>':
-                    rep_query[key] = [{"a": 1}]
-                elif value == '?array<?binData>':
-                    rep_query[key] = [{"$binary": {"base64": "YQ==", "subType": "00"}}]
-                elif value == '?array<?timestamp>':
-                    rep_query[key] = [{ "$timestamp": { "t": 1677749825, "i": 20 } }]
-                elif value == '?array<?minKey>':
-                    rep_query[key] = [{ '$minKey': 1 }]
-                elif value == '?array<?maxKey>':
-                    rep_query[key] = [{ '$maxKey': 1 }]
-                elif value == '?array<?array>':
-                    rep_query[key] = [["a"]]
-                else:
-                    rep_query[key] = value  # Keep other placeholders as is for now
-            elif isinstance(value, dict):
-                rep_query[key] = create_representative_query(value)
-            elif isinstance(value, list):
-                rep_query[key] = [create_representative_query(item) for item in value]
+    def replace_placeholder(value):
+        if isinstance(value, str) and value.startswith('?'):
+            if value == '?number':
+                return 1
+            elif value == '?string':
+                return "a"
+            elif value == '?date':
+                return datetime.utcnow()
+            elif value == '?objectId':
+                return ObjectId()
+            elif value == '?bool':
+                return True
+            elif value == '?null':
+                return None
+            elif value == '?object':
+                return {"a": 1}
+            elif value == '?binData':
+                return b'binary_data'
+            elif value == '?timestamp':
+                return datetime.utcnow()
+            elif value == '?minKey':
+                return {"$minKey": 1}
+            elif value == '?maxKey':
+                return {"$maxKey": 1}
+            elif value.startswith('?array'):
+                inner_type = value[6:-1]  # extract type inside array
+                return [replace_placeholder(f"?{inner_type}")]
             else:
-                rep_query[key] = value
-        return rep_query
-    elif isinstance(query_doc, list):
-        return [create_representative_query(item) for item in query_doc]
-    else:
-        return query_doc
+                return value  # Keep other placeholders as is
+        return value
+
+    def traverse(obj):
+        if isinstance(obj, dict):
+            return {k: traverse(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [traverse(item) for item in obj]
+        else:
+            return replace_placeholder(obj)
+
+    return traverse(query_doc)
 
 @safe_execute
 def transform_to_mongosh(query):
