@@ -14,8 +14,8 @@ The application generates index suggestions for collection scans. This is not a 
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/mongodb-query-stats-analyzer.git
-cd mongodb-query-stats-analyzer
+git clone https://github.com/fsnow/MongoTools
+cd QuerySetter
 pip install -r requirements.txt
 ```
 
