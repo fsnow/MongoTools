@@ -3,7 +3,7 @@ import { MongoClient } from "npm:mongodb";
 
 // --- Configuration ---
 // Replace with your MongoDB connection string.
-const uri = "mongodb+srv://franksnow:giraffes@latencies.25orp.mongodb.net/";
+const uri = "mongodb+srv://<creds>@latencies.25orp.mongodb.net/";
 // --- End Configuration ---
 
 // Create a new MongoClient
