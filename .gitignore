@@ -4,3 +4,5 @@
 QuerySetter/debug/
 
 QuerySetter/__pycache__/
+
+*.class
