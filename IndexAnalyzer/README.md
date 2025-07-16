@@ -1,56 +1,88 @@
-# MongoDB Index Analyzer (JavaScript)
+# MongoDB Index Analyzer
 
-This script provides functionality to analyze MongoDB queries to determine if they are perfectly covered by existing indexes. This is useful for identifying potentially inefficient queries that may result in collection scans or in-memory sorts.
+This project provides two implementations of a tool to analyze MongoDB queries and determine if they can be fully covered by existing B-tree indexes. The goal is to help developers identify queries that might perform inefficiently due to in-memory sorting or collection scans.
 
-## `index-analyzer.js`
+The analysis is based on the **Equality-Sort-Range (ESR)** rule, a fundamental principle for understanding how MongoDB uses compound indexes.
 
-### Functionality
+## Implementations
 
-The core of the analyzer is the `analyzeIndexCoverage(query, sort, namespace)` function.
+This repository contains two separate implementations of the Index Analyzer:
 
-*   **`query`**: The MongoDB query document (e.g., `{ status: "active", score: { $gte: 90 } }`).
-*   **`sort`**: The MongoDB sort document (e.g., `{ createdAt: -1 }`).
-*   **`namespace`**: A string representing the database and collection (e.g., `"mydatabase.mycollection"`).
+-   **[Java Implementation](./Java/README.md)**
+-   **[JavaScript Implementation](./JavaScript/README.md)**
 
-The function returns `true` if a perfect index match is found, and `false` otherwise.
+### Java Implementation
 
-### Key Features
+The Java version is a structured, object-oriented library built as a Maven project. It is designed to be integrated into Java applications that use Spring Data MongoDB.
 
-*   **Disjunctive Normal Form (DNF) Transformation**: The script can transform complex queries with `$or` and `$and` operators into DNF. This allows for the analysis of each branch of an `$or` query independently.
-*   **ESR (Equality, Sort, Range) Rule**: The analysis follows the ESR rule to determine if an index can be used effectively.
-    1.  **Equality**: Fields with equality-based conditions (`$eq`, `$in`).
-    2.  **Sort**: Fields used for sorting.
-    3.  **Range**: Fields with range-based conditions (`$gt`, `$gte`, `$lt`, `$lte`).
-*   **Advanced Operator Handling**: The script has basic handling for operators like `$not`, `$nor`, and `$elemMatch`, generally taking a conservative approach by flagging them as not perfectly covered due to their complexity.
-*   **Reverse Index Traversal**: The analyzer can detect when an index can be used in reverse to satisfy a sort order.
+-   **Environment**: Java 11+, Maven
+-   **Query Language**: Spring Data MongoDB `Criteria` API
+-   **Key Features**:
+    -   Type-safe query building
+    -   Integration with the MongoDB Java Driver
+    -   Comprehensive unit tests with JUnit 5 and Testcontainers
+    -   Detailed analysis of query structure
 
-## `test-index-analyzer.js`
+**[>> Learn more about the Java Implementation](./Java/README.md)**
 
-### Functionality
+### JavaScript Implementation
 
-This file contains a comprehensive test suite for the `index-analyzer.js` script. It uses the `mongo` shell's `load()` function to execute the tests.
+The JavaScript version is a lightweight script designed to be run directly within the MongoDB shell (`mongo` or `mongosh`). It is ideal for quick analysis and testing without the need for a full application setup.
 
-### Test Categories
+-   **Environment**: MongoDB Shell
+-   **Query Language**: Raw MongoDB query documents (JSON-like objects)
+--   **Key Features**:
+    -   No external dependencies
+    -   Handles complex queries with `$or` and `$and` operators through Disjunctive Normal Form (DNF) transformation
+    -   Includes an extensive, self-contained test suite
 
-The test suite is organized into the following categories:
+**[>> Learn more about the JavaScript Implementation](./JavaScript/README.md)**
 
-*   **Equality-Only Queries**: Tests for simple queries with only equality conditions.
-*   **ESR Scenarios**: A wide range of tests covering the Equality-Sort-Range rule, including various combinations of equality, sort, and range predicates.
-*   **OR Queries**: Tests for queries involving the `$or` operator, including scenarios where DNF transformation is required.
-*   **DNF Transformation**: Specific tests to validate the correctness of the DNF transformation logic for complex queries.
-*   **Advanced Operators**: Tests for queries using `$nor`, `$not`, and `$elemMatch`.
-*   **Edge Cases**: Tests for scenarios like empty queries, sorts on non-existent fields, and invalid input.
+## Comparison
 
-### Running the Tests
+| Feature                  | Java Implementation                               | JavaScript Implementation                          |
+| ------------------------ | ------------------------------------------------- | -------------------------------------------------- |
+| **Environment**          | Java 11+, Maven                                   | MongoDB Shell (`mongo` or `mongosh`)               |
+| **Query Input**          | Spring Data `Criteria` objects                    | Raw MongoDB query documents                        |
+| **Primary Use Case**     | Integrating into existing Java applications       | Ad-hoc analysis, scripting, and direct DB testing  |
+| **Dependencies**         | Spring Data, MongoDB Driver, SLF4J                | None                                               |
+| **Testing**              | JUnit 5, Mockito, Testcontainers                  | Self-contained test suite run in the `mongo` shell |
 
-The tests are designed to be run from the `mongo` shell:
+## Getting Started
 
-```sh
-mongo test-index-analyzer.js
-```
+### Java
 
-The test script will:
-1.  Set up a temporary test database and collection (`indexAnalyzerTest.testCollection`).
-2.  Create a variety of indexes to test against.
-3.  Run all the test cases and print the results.
-4.  Clean up by dropping the test database.
+1.  **Prerequisites**: Java 11+ and Maven 3.6+ installed.
+2.  **Navigate to the `Java` directory**:
+    ```sh
+    cd Java
+    ```
+3.  **Run the tests to verify the setup**:
+    ```sh
+    mvn test
+    ```
+4.  **Integrate into your project**: Add the `mongodb-index-analyzer` as a dependency to your project (e.g., by installing it locally or deploying it to a repository). See the [Java README](./Java/README.md) for usage examples.
+
+### JavaScript
+
+1.  **Prerequisites**: A running MongoDB instance and the `mongo` or `mongosh` shell.
+2.  **Navigate to the `JavaScript` directory**:
+    ```sh
+    cd JavaScript
+    ```
+3.  **Run the test suite from your terminal**:
+    ```sh
+    mongo test-index-analyzer.js
+    ```
+    This will connect to your local MongoDB instance, create a temporary test collection, run the analysis, and print the results.
+4.  **Use in the shell**: Load the `index-analyzer.js` script in a `mongo` shell session to use the `analyzeIndexCoverage` function directly:
+    ```javascript
+    load('index-analyzer.js');
+
+    const query = { status: "active" };
+    const sort = { createdAt: -1 };
+    const namespace = "mydatabase.mycollection"; // Replace with your namespace
+
+    const isCovered = analyzeIndexCoverage(query, sort, namespace);
+    print(`Query is covered by an index: ${isCovered}`);
+    ```
