@@ -1,6 +1,10 @@
 package com.fsnow.indexanalyzer;
 
+import com.fsnow.indexanalyzer.cache.IndexCache;
+import com.fsnow.indexanalyzer.cache.TTLIndexCache;
+import com.fsnow.indexanalyzer.config.IndexAnalyzerConfig;
 import com.fsnow.indexanalyzer.exception.InvalidNamespaceException;
+import com.fsnow.indexanalyzer.integration.CachedIndexRetriever;
 import com.fsnow.indexanalyzer.integration.IndexRetriever;
 import com.fsnow.indexanalyzer.integration.MongoClientAdapter;
 import com.fsnow.indexanalyzer.matching.IndexMatcher;
@@ -17,6 +21,7 @@ import org.springframework.data.mongodb.core.query.Criteria;
 
 import java.io.Closeable;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Main entry point for MongoDB index coverage analysis.
@@ -32,6 +37,8 @@ public class IndexAnalyzer implements Closeable {
     private final SortParser sortParser;
     private final DNFTransformer dnfTransformer;
     private final IndexMatcher indexMatcher;
+    private final Optional<IndexCache> indexCache;
+    private final IndexAnalyzerConfig config;
     
     /**
      * Creates an IndexAnalyzer with a MongoDB connection string.
@@ -44,8 +51,37 @@ public class IndexAnalyzer implements Closeable {
      * Creates an IndexAnalyzer with a MongoDB connection string and timeout.
      */
     public IndexAnalyzer(String connectionString, int timeoutMs) {
-        this.mongoClientAdapter = new MongoClientAdapter(connectionString, timeoutMs);
-        this.indexRetriever = new IndexRetriever(mongoClientAdapter);
+        this(connectionString, IndexAnalyzerConfig.builder()
+                .connectionTimeoutMs(timeoutMs)
+                .build());
+    }
+    
+    /**
+     * Creates an IndexAnalyzer with a MongoDB connection string and configuration.
+     * This constructor allows enabling caching and other advanced options.
+     * 
+     * @param connectionString The MongoDB connection string
+     * @param config The configuration for the analyzer
+     */
+    public IndexAnalyzer(String connectionString, IndexAnalyzerConfig config) {
+        this.config = config;
+        this.mongoClientAdapter = new MongoClientAdapter(connectionString, config.getConnectionTimeoutMs());
+        
+        // Create base index retriever
+        IndexRetriever baseRetriever = new IndexRetriever(mongoClientAdapter);
+        
+        // Setup caching if enabled
+        if (config.isCacheEnabled()) {
+            IndexCache cache = new TTLIndexCache(config.getCacheTTLMinutes());
+            this.indexCache = Optional.of(cache);
+            this.indexRetriever = new CachedIndexRetriever(baseRetriever, cache);
+            logger.info("Index caching enabled with TTL={} minutes", config.getCacheTTLMinutes());
+        } else {
+            this.indexCache = Optional.empty();
+            this.indexRetriever = baseRetriever;
+            logger.info("Index caching disabled");
+        }
+        
         this.criteriaParser = new CriteriaParser();
         this.sortParser = new SortParser();
         this.dnfTransformer = new DNFTransformer();
@@ -119,8 +155,36 @@ public class IndexAnalyzer implements Closeable {
         }
     }
     
+    /**
+     * Gets the cached index retriever if caching is enabled.
+     * This allows access to cache management methods.
+     * 
+     * @return Optional containing the CachedIndexRetriever if caching is enabled
+     */
+    public Optional<CachedIndexRetriever> getCachedIndexRetriever() {
+        if (indexRetriever instanceof CachedIndexRetriever) {
+            return Optional.of((CachedIndexRetriever) indexRetriever);
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * Gets cache statistics if caching is enabled.
+     * 
+     * @return Cache statistics string, or "Caching disabled" if not enabled
+     */
+    public String getCacheStats() {
+        if (indexCache.isPresent() && indexCache.get() instanceof TTLIndexCache) {
+            return ((TTLIndexCache) indexCache.get()).getStats();
+        }
+        return "Caching disabled";
+    }
+    
     @Override
     public void close() {
+        // Shutdown cache if present
+        indexCache.ifPresent(IndexCache::shutdown);
+        
         if (mongoClientAdapter != null) {
             mongoClientAdapter.close();
         }
