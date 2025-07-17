@@ -142,8 +142,8 @@ mvn test -Dtest=CompoundQueryMatchingTest
 
 ## Dependencies
 
--   Spring Data MongoDB 4.2.0
--   MongoDB Java Driver 4.11.0
+-   Spring Data MongoDB 4.4.5
+-   MongoDB Java Driver 5.2.1
 -   JUnit 5.10.0
 -   Testcontainers 1.19.0
 -   Mockito 5.5.0
