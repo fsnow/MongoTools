@@ -19,6 +19,10 @@ The analysis is based on the **Equality-Sort-Range (ESR)** rule, a fundamental p
     -   Validates that all equality predicates form a prefix of the index.
     -   Supports multi-field sorts.
     -   Detects when an index can be used in **reverse order** to satisfy a sort requirement.
+-   **Index Caching**:
+    -   In-memory, time-based (TTL) caching of collection indexes to reduce calls to the database.
+    -   Configurable via the `IndexAnalyzerConfig` builder.
+    -   Includes methods for manual cache invalidation and statistics monitoring.
 -   **MongoDB Integration**: Fetches index information directly from a running MongoDB instance to ensure analysis is based on the actual database state.
 -   **Exception Handling**: Provides specific exceptions for common issues like invalid MongoDB namespaces or query parsing failures.
 
@@ -53,7 +57,7 @@ Then, add the dependency to your `pom.xml`:
 
 ### Basic Usage
 
-The main entry point is the `IndexAnalyzer` class. It is `Closeable` and should be used within a try-with-resources block to ensure the MongoDB connection is managed correctly.
+The main entry point is the `IndexAnalyzer` class. It is `Closeable` and should be used within a try-with-resources block to ensure the MongoDB connection is managed correctly. By default, caching is disabled.
 
 ```java
 import com.fsnow.indexanalyzer.IndexAnalyzer;
@@ -65,28 +69,50 @@ public class Main {
         String connectionString = "mongodb://localhost:27017";
         String namespace = "mydb.mycollection";
 
+        // Caching is disabled by default
         try (IndexAnalyzer analyzer = new IndexAnalyzer(connectionString)) {
-            // Example 1: A query perfectly covered by an index { "status": 1, "createdAt": -1 }
             Criteria criteria = Criteria.where("status").is("active");
             Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
 
             boolean isCovered = analyzer.analyzeIndexCoverage(criteria, sort, namespace);
-            System.out.println("Query 1 is covered: " + isCovered); // Expected: true
+            System.out.println("Query is covered: " + isCovered);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
 
-            // Example 2: A complex query requiring DNF transformation
-            Criteria complexCriteria = new Criteria().andOperator(
-                Criteria.where("status").is("active"),
-                new Criteria().orOperator(
-                    Criteria.where("category").is("A"),
-                    Criteria.where("score").gte(100)
-                )
-            );
-            // This transforms to: (status = "active" AND category = "A") OR (status = "active" AND score >= 100)
-            // Both branches must be covered by indexes for the result to be true.
+### Advanced Usage: Enabling Caching
 
-            boolean isComplexCovered = analyzer.analyzeIndexCoverage(complexCriteria, null, namespace);
-            System.out.println("Query 2 is covered: " + isComplexCovered);
+To improve performance by reducing database calls, you can enable and configure the index cache using `IndexAnalyzerConfig`.
 
+```java
+import com.fsnow.indexanalyzer.IndexAnalyzer;
+import com.fsnow.indexanalyzer.config.IndexAnalyzerConfig;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.domain.Sort;
+
+public class CachingMain {
+    public static void main(String[] args) {
+        String connectionString = "mongodb://localhost:27017";
+        String namespace = "mydb.mycollection";
+
+        // Configure the analyzer to use caching with a 10-minute TTL
+        IndexAnalyzerConfig config = IndexAnalyzerConfig.builder()
+                .cacheEnabled(true)
+                .cacheTTLMinutes(10)
+                .build();
+
+        try (IndexAnalyzer analyzer = new IndexAnalyzer(connectionString, config)) {
+            // The first call for a namespace will fetch and cache the indexes
+            analyzer.analyzeIndexCoverage(Criteria.where("status").is("active"), null, namespace);
+
+            // Subsequent calls for the same namespace will use the cache
+            analyzer.analyzeIndexCoverage(Criteria.where("category").is("A"), null, namespace);
+
+            // Print cache statistics
+            System.out.println(analyzer.getCacheStats());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -111,6 +137,7 @@ mvn test -Dtest=CompoundQueryMatchingTest
 -   **Immutable Models**: Data models (e.g., `MongoIndex`, `QueryAnalysis`) are immutable to ensure thread safety.
 -   **Component-Based Parsing**: `CriteriaParser`, `SortParser`, and `DNFTransformer` handle distinct stages of the analysis pipeline.
 -   **Advanced Matching Logic**: The `CompoundQueryMatcher` contains the sophisticated logic for evaluating ESR rules across DNF branches, including sort order validation and reverse traversal checks.
+-   **Decorator-Based Caching**: The `CachedIndexRetriever` decorates the `IndexRetriever` to provide a clean, non-invasive caching layer.
 -   **Logging**: Uses SLF4J/Logback for detailed logging, which is helpful for debugging complex query analyses.
 
 ## Dependencies
