@@ -1,7 +1,0 @@
-com/fsnow/indexanalyzer/CriteriaIntrospectionTest.class
-com/fsnow/indexanalyzer/IndexAnalyzerBasicTest.class
-com/fsnow/indexanalyzer/CompoundQueryMatchingTest.class
-com/fsnow/indexanalyzer/IndexAnalyzerPhase2Test.class
-com/fsnow/indexanalyzer/ReverseTraversalTest.class
-com/fsnow/indexanalyzer/DNFTransformationTest.class
-com/fsnow/indexanalyzer/AdvancedOperatorTest.class
