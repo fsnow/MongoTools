@@ -6,3 +6,9 @@ QuerySetter/debug/
 QuerySetter/__pycache__/
 
 *.class
+
+IndexAnalyzer/Java/target/maven-status/maven-compiler-plugin/compile/default-compile/
+
+IndexAnalyzer/Java/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/
+
+IndexAnalyzer/Java/target/surefire-reports/
